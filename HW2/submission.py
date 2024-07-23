@@ -17,8 +17,10 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int, dna):
         "delta_battery": dna.features[1],
         "delta_pack": dna.features[2],
         "pack_bonus": dna.features[3],
-        "distance_to_target": dna.features[4],  # This marker has NEGATIVE value
-        "distance_to_charger": dna.features[5]  # This marker has NEGATIVE value
+        # This marker has NEGATIVE value
+        "distance_to_target": dna.features[4],
+        # This marker has NEGATIVE value
+        "distance_to_charger": dna.features[5]
     }
     # marker_weights = {
     #     "delta_credit": 8.564914201849925,
@@ -39,16 +41,20 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int, dna):
     markers["delta_pack"] = has_pack - rival_has_pack
     markers["pack_bonus"] = has_pack
     if not robot.package:
-        closest_pack = -min([manhattan_distance(robot.position, pack.position) for pack in env.packages])
+        closest_pack = - \
+            min([manhattan_distance(robot.position, pack.position)
+                for pack in env.packages])
         markers["distance_to_target"] = closest_pack
     else:
-        markers["distance_to_target"] = -manhattan_distance(robot.position, robot.package.destination)
+        markers["distance_to_target"] = - \
+            manhattan_distance(robot.position, robot.package.destination)
     markers["distance_to_target"] = bat_percent * markers["distance_to_target"]
     closest_charger = min(
         [manhattan_distance(robot.position, charger.position) for charger in env.charge_stations])
     markers["distance_to_charger"] = -closest_charger + charger_gain
 
     return sum([markers[key] * marker_weights[key] for key in markers.keys()])
+
 
 class DNA:
     def __init__(self, num_features, feature_min, feature_max, mutation_chance=0.1):
@@ -66,15 +72,16 @@ class DNA:
         return result
 
     def crossover(self, other):
-        transposed = DNA(len(self.features), self.feature_min, self.feature_max)
+        transposed = DNA(len(self.features),
+                         self.feature_min, self.feature_max)
         for feature in range(len(self.features)):
             random_weight = random.random()
             transposed.features[feature] = random_weight*(self.features[feature]) + \
-                                           (1-random_weight)*(other.features[feature])
+                (1-random_weight)*(other.features[feature])
             if random.random() < self.mutation_chance:
-                transposed.features[feature] = random.random() * (self.feature_max-self.feature_min)
+                transposed.features[feature] = random.random(
+                ) * (self.feature_max-self.feature_min)
         return transposed
-
 
 
 class AgentGreedyImproved(AgentGreedy):
@@ -83,15 +90,41 @@ class AgentGreedyImproved(AgentGreedy):
         self.DNA = DNA(6, 0, 10)
         self.genetic_worth = 0
         self.wins = 0
-        #TODO: Add num generations, num mutations
+        # TODO: Add num generations, num mutations
+
     def heuristic(self, env: WarehouseEnv, robot_id: int):
         return smart_heuristic(env, robot_id, self.DNA)
 
 
 class AgentMinimax(Agent):
     # TODO: section b : 1
+
     def run_step(self, env: WarehouseEnv, agent_id, time_limit):
-        raise NotImplementedError()
+        self.original = agent_id
+        operators = env.get_legal_operators(agent_id)
+        return max([self.value(env.clone().apply_operator(agent_id, op), agent_id)
+                    for op in operators])
+
+    def value(self, state: WarehouseEnv, agent_id):
+        # if time limit reached TODO
+        if state.done():
+            return state.get_robot(agent_id).credit - state.get_robot((agent_id + 1) % 2).credit
+        if agent_id == self.original:
+            return self.max_value(state, agent_id)
+        else:
+            return self.min_value(state, agent_id)
+
+    def max_value(self, state: WarehouseEnv, agent_id):
+        new_agent_id = (agent_id + 1) % 2
+        operators = state.get_legal_operators(new_agent_id)
+        return max([self.value(state.clone().apply_operator(new_agent_id, op), new_agent_id)
+                    for op in operators])
+
+    def min_value(self, state: WarehouseEnv, agent_id):
+        new_agent_id = (agent_id + 1) % 2
+        operators = state.get_legal_operators(new_agent_id)
+        return min([self.value(state.clone().apply_operator(new_agent_id, op), new_agent_id)
+                    for op in operators])
 
 
 class AgentAlphaBeta(Agent):
