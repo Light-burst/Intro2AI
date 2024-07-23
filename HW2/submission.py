@@ -49,8 +49,7 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int, dna):
         markers["distance_to_target"] = - \
             manhattan_distance(robot.position, robot.package.destination)
     markers["distance_to_target"] = bat_percent * markers["distance_to_target"]
-    closest_charger = min(
-        [manhattan_distance(robot.position, charger.position) for charger in env.charge_stations])
+    closest_charger = min([manhattan_distance(robot.position, charger.position) for charger in env.charge_stations])
     markers["distance_to_charger"] = -closest_charger + charger_gain
 
     return sum([markers[key] * marker_weights[key] for key in markers.keys()])
@@ -102,8 +101,9 @@ class AgentMinimax(Agent):
     def run_step(self, env: WarehouseEnv, agent_id, time_limit):
         self.original = agent_id
         operators = env.get_legal_operators(agent_id)
-        return max([self.value(env.clone().apply_operator(agent_id, op), agent_id)
-                    for op in operators])
+        childrenops = [(env.clone(), op) for op in operators]
+        children = [child[0] for child in childrenops if not child[0].apply_operator(agent_id, child[1])]
+        return max([self.value(child, agent_id) for child in children])
 
     def value(self, state: WarehouseEnv, agent_id):
         # if time limit reached TODO
@@ -117,14 +117,18 @@ class AgentMinimax(Agent):
     def max_value(self, state: WarehouseEnv, agent_id):
         new_agent_id = (agent_id + 1) % 2
         operators = state.get_legal_operators(new_agent_id)
-        return max([self.value(state.clone().apply_operator(new_agent_id, op), new_agent_id)
-                    for op in operators])
+
+        childrenops = [(state.clone(), op) for op in operators]
+        children = [child[0] for child in childrenops if not child[0].apply_operator(new_agent_id, child[1])]
+        return max([self.value(child, new_agent_id) for child in children])
 
     def min_value(self, state: WarehouseEnv, agent_id):
         new_agent_id = (agent_id + 1) % 2
         operators = state.get_legal_operators(new_agent_id)
-        return min([self.value(state.clone().apply_operator(new_agent_id, op), new_agent_id)
-                    for op in operators])
+
+        childrenops = [(state.clone(), op) for op in operators]
+        children = [child[0] for child in childrenops if not child[0].apply_operator(new_agent_id, child[1])]
+        return min([self.value(child, new_agent_id) for child in children])
 
 
 class AgentAlphaBeta(Agent):
