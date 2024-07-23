@@ -1,9 +1,10 @@
 from Agent import Agent, AgentGreedy
 from WarehouseEnv import WarehouseEnv, manhattan_distance
 import random
-
-
+import func_timeout
 # TODO: section a : 3
+
+
 def smart_heuristic(env: WarehouseEnv, robot_id: int, dna):
     # Get details about the robots
     robot = env.get_robot(robot_id)
@@ -49,7 +50,8 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int, dna):
         markers["distance_to_target"] = - \
             manhattan_distance(robot.position, robot.package.destination)
     markers["distance_to_target"] = bat_percent * markers["distance_to_target"]
-    closest_charger = min([manhattan_distance(robot.position, charger.position) for charger in env.charge_stations])
+    closest_charger = min([manhattan_distance(
+        robot.position, charger.position) for charger in env.charge_stations])
     markers["distance_to_charger"] = -closest_charger + charger_gain
 
     return sum([markers[key] * marker_weights[key] for key in markers.keys()])
@@ -99,36 +101,50 @@ class AgentMinimax(Agent):
     # TODO: section b : 1
 
     def run_step(self, env: WarehouseEnv, agent_id, time_limit):
+        self.maximum = 0
         self.original = agent_id
+        iterations = 1
+        try:
+            func_timeout(time_limit, self.anytime_step, args=(self, env, agent_id, iterations))
+        except func_timeout.FunctionTimedOut:
+            return self.maximum
+    def anytime_step(self, env: WarehouseEnv, agent_id, iterations):
         operators = env.get_legal_operators(agent_id)
         childrenops = [(env.clone(), op) for op in operators]
-        children = [child[0] for child in childrenops if not child[0].apply_operator(agent_id, child[1])]
-        return max([self.value(child, agent_id) for child in children])
+        children = [child[0] for child in childrenops if not child[0].apply_operator(
+            agent_id, child[1])]
+        while (True):
+            self.maximum = max([self.value(child, agent_id, iterations)
+                          for child in children])
+            iterations += 1
 
-    def value(self, state: WarehouseEnv, agent_id):
+
+    def value(self, state: WarehouseEnv, agent_id, iterations):
         # if time limit reached TODO
-        if state.done():
+        if state.done() or iterations == 0:
             return state.get_robot(agent_id).credit - state.get_robot((agent_id + 1) % 2).credit
         if agent_id == self.original:
-            return self.max_value(state, agent_id)
+            return self.max_value(state, agent_id, iterations)
         else:
-            return self.min_value(state, agent_id)
+            return self.min_value(state, agent_id, iterations)
 
-    def max_value(self, state: WarehouseEnv, agent_id):
+    def max_value(self, state: WarehouseEnv, agent_id, iterations):
         new_agent_id = (agent_id + 1) % 2
         operators = state.get_legal_operators(new_agent_id)
 
         childrenops = [(state.clone(), op) for op in operators]
-        children = [child[0] for child in childrenops if not child[0].apply_operator(new_agent_id, child[1])]
-        return max([self.value(child, new_agent_id) for child in children])
+        children = [child[0] for child in childrenops if not child[0].apply_operator(
+            new_agent_id, child[1])]
+        return max([self.value(child, new_agent_id, iterations - 1) for child in children])
 
-    def min_value(self, state: WarehouseEnv, agent_id):
+    def min_value(self, state: WarehouseEnv, agent_id, iterations):
         new_agent_id = (agent_id + 1) % 2
         operators = state.get_legal_operators(new_agent_id)
 
         childrenops = [(state.clone(), op) for op in operators]
-        children = [child[0] for child in childrenops if not child[0].apply_operator(new_agent_id, child[1])]
-        return min([self.value(child, new_agent_id) for child in children])
+        children = [child[0] for child in childrenops if not child[0].apply_operator(
+            new_agent_id, child[1])]
+        return min([self.value(child, new_agent_id, iterations - 1) for child in children])
 
 
 class AgentAlphaBeta(Agent):
