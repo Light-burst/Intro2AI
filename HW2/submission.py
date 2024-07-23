@@ -13,24 +13,24 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int, dna):
     charger_gain = (min(20, bat_percent + robot.credit) - bat_percent)
 
     # Weight of each marker
-    marker_weights = {
-        "delta_credit": dna.features[0],
-        "delta_battery": dna.features[1],
-        "delta_pack": dna.features[2],
-        "pack_bonus": dna.features[3],
-        # This marker has NEGATIVE value
-        "distance_to_target": dna.features[4],
-        # This marker has NEGATIVE value
-        "distance_to_charger": dna.features[5]
-    }
     # marker_weights = {
-    #     "delta_credit": 8.564914201849925,
-    #     "delta_battery": 8.411580473572394,
-    #     "delta_pack": 6.374969706178064,
-    #     "pack_bonus": 2.7015924639464206,
-    #     "distance_to_target": 5.351029655108932,  # This marker has NEGATIVE value
-    #     "distance_to_charger": 0.13667647037480468  # This marker has NEGATIVE value
+    #     "delta_credit": dna.features[0],
+    #     "delta_battery": dna.features[1],
+    #     "delta_pack": dna.features[2],
+    #     "pack_bonus": dna.features[3],
+    #     # This marker has NEGATIVE value
+    #     "distance_to_target": dna.features[4],
+    #     # This marker has NEGATIVE value
+    #     "distance_to_charger": dna.features[5]
     # }
+    marker_weights = {
+        "delta_credit": 20,
+        "delta_battery": 1.154619400439284,
+        "delta_pack": 6.358148000063247,
+        "pack_bonus": 5.515369624976212,
+        "distance_to_target": 1.2415100626400688,  # This marker has NEGATIVE value
+        "distance_to_charger": 5.972927491904429  # This marker has NEGATIVE value
+    }
 
     # Calculate markers that give the robot advantage
     # TODO: seperate deltas from stand alone
@@ -42,17 +42,13 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int, dna):
     markers["delta_pack"] = has_pack - rival_has_pack
     markers["pack_bonus"] = has_pack
     if not robot.package:
-        closest_pack = - \
-            min([manhattan_distance(robot.position, pack.position)
-                for pack in env.packages])
+        closest_pack = -min([manhattan_distance(robot.position, pack.position) for pack in env.packages])
         markers["distance_to_target"] = closest_pack
     else:
-        markers["distance_to_target"] = - \
-            manhattan_distance(robot.position, robot.package.destination)
+        markers["distance_to_target"] = -manhattan_distance(robot.position, robot.package.destination)
     markers["distance_to_target"] = bat_percent * markers["distance_to_target"]
-    closest_charger = min([manhattan_distance(
-        robot.position, charger.position) for charger in env.charge_stations])
-    markers["distance_to_charger"] = -closest_charger + charger_gain
+    closest_charger = min([manhattan_distance(robot.position, charger.position) for charger in env.charge_stations])
+    markers["distance_to_charger"] = -closest_charger * charger_gain #TODO: add flat debuff
 
     return sum([markers[key] * marker_weights[key] for key in markers.keys()])
 
@@ -80,8 +76,7 @@ class DNA:
             transposed.features[feature] = random_weight*(self.features[feature]) + \
                 (1-random_weight)*(other.features[feature])
             if random.random() < self.mutation_chance:
-                transposed.features[feature] = random.random(
-                ) * (self.feature_max-self.feature_min)
+                transposed.features[feature] = random.random() * (self.feature_max-self.feature_min)
         return transposed
 
 
@@ -98,31 +93,33 @@ class AgentGreedyImproved(AgentGreedy):
 
 
 class AgentMinimax(Agent):
-    # TODO: section b : 1
-
     def run_step(self, env: WarehouseEnv, agent_id, time_limit):
-        self.maximum = 0
+        self.best_move = None
         self.original = agent_id
         iterations = 1
         try:
-            func_timeout(time_limit, self.anytime_step, args=(self, env, agent_id, iterations))
+            func_timeout.func_timeout(time_limit-0.1, self.anytime_step, args=(env, self.original, iterations))
         except func_timeout.FunctionTimedOut:
-            return self.maximum
+            return self.best_move
+
     def anytime_step(self, env: WarehouseEnv, agent_id, iterations):
         operators = env.get_legal_operators(agent_id)
-        childrenops = [(env.clone(), op) for op in operators]
-        children = [child[0] for child in childrenops if not child[0].apply_operator(
-            agent_id, child[1])]
-        while (True):
-            self.maximum = max([self.value(child, agent_id, iterations)
-                          for child in children])
+        children = self.apply_moves(agent_id, env)
+        while True:
+            child_values = [self.value(child, agent_id, iterations) for child in children]
+            self.best_move = operators[child_values.index(max(child_values))]
             iterations += 1
+            print(iterations)
 
 
     def value(self, state: WarehouseEnv, agent_id, iterations):
-        # if time limit reached TODO
-        if state.done() or iterations == 0:
-            return state.get_robot(agent_id).credit - state.get_robot((agent_id + 1) % 2).credit
+        if iterations>7:
+            1+1
+        if state.done():
+            return state.get_robot(self.original).credit - state.get_robot((self.original + 1) % 2).credit
+        if iterations == 0:
+            return state.get_robot(self.original).credit - state.get_robot((self.original + 1) % 2).credit
+            #return smart_heuristic(state, self.original, None)
         if agent_id == self.original:
             return self.max_value(state, agent_id, iterations)
         else:
@@ -130,21 +127,20 @@ class AgentMinimax(Agent):
 
     def max_value(self, state: WarehouseEnv, agent_id, iterations):
         new_agent_id = (agent_id + 1) % 2
-        operators = state.get_legal_operators(new_agent_id)
-
-        childrenops = [(state.clone(), op) for op in operators]
-        children = [child[0] for child in childrenops if not child[0].apply_operator(
-            new_agent_id, child[1])]
+        children = self.apply_moves(agent_id, state)
         return max([self.value(child, new_agent_id, iterations - 1) for child in children])
 
     def min_value(self, state: WarehouseEnv, agent_id, iterations):
         new_agent_id = (agent_id + 1) % 2
-        operators = state.get_legal_operators(new_agent_id)
-
-        childrenops = [(state.clone(), op) for op in operators]
-        children = [child[0] for child in childrenops if not child[0].apply_operator(
-            new_agent_id, child[1])]
+        children = self.apply_moves(agent_id, state)
         return min([self.value(child, new_agent_id, iterations - 1) for child in children])
+
+    def apply_moves(self, agent, env: WarehouseEnv):
+        operators = env.get_legal_operators(agent)
+        children = [env.clone() for op in operators]
+        for child, op in zip(children, operators):
+            child.apply_operator(agent, op)
+        return children
 
 
 class AgentAlphaBeta(Agent):
