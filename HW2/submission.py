@@ -13,42 +13,36 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int, dna):
     charger_gain = (min(20, bat_percent + robot.credit) - bat_percent)
 
     # Weight of each marker
-    # marker_weights = {
-    #     "delta_credit": dna.features[0],
-    #     "delta_battery": dna.features[1],
-    #     "delta_pack": dna.features[2],
-    #     "pack_bonus": dna.features[3],
-    #     # This marker has NEGATIVE value
-    #     "distance_to_target": dna.features[4],
-    #     # This marker has NEGATIVE value
-    #     "distance_to_charger": dna.features[5]
-    # }
     marker_weights = {
-        "delta_credit": 20,
-        "delta_battery": 1.154619400439284,
-        "delta_pack": 6.358148000063247,
-        "pack_bonus": 5.515369624976212,
-        "distance_to_target": 1.2415100626400688,  # This marker has NEGATIVE value
-        "distance_to_charger": 5.972927491904429  # This marker has NEGATIVE value
+        "delta_credit": 76.58059571136468,
+        "delta_battery": 7.341291533674699,
+        "delta_pack": 5.534079750825349,
+        "credit": 93.74017271498576,
+        "battery": 27.416059349426625,
+        "pack_bonus": 82.46689438553943,
+        "distance_to_target": 13.87751731938508,  # This marker has NEGATIVE value
+        "distance_to_charger": 0.9502993298955875  # This marker has NEGATIVE value
     }
 
     # Calculate markers that give the robot advantage
-    # TODO: seperate deltas from stand alone
+    if other_robot.battery == 0 and robot.credit-other_robot.credit > 0:
+        return float("inf")
     markers = {}
     markers["delta_credit"] = robot.credit - other_robot.credit
+    markers["credit"] = robot.credit
     markers["delta_battery"] = robot.battery - other_robot.battery
+    markers["battery"] = robot.battery
     has_pack = 1 if robot.package else 0
     rival_has_pack = 1 if other_robot.package else 0
     markers["delta_pack"] = has_pack - rival_has_pack
     markers["pack_bonus"] = has_pack
+
     if not robot.package:
-        closest_pack = -min([manhattan_distance(robot.position, pack.position) for pack in env.packages])
-        markers["distance_to_target"] = closest_pack
-    else:
-        markers["distance_to_target"] = -manhattan_distance(robot.position, robot.package.destination)
-    markers["distance_to_target"] = bat_percent * markers["distance_to_target"]
+        closest_pack = -min([manhattan_distance(robot.position, pack.position) for pack in env.packages if pack.on_board])
+    markers["distance_to_target"] = closest_pack if not robot.package else -manhattan_distance(robot.position, robot.package.destination)
+
     closest_charger = min([manhattan_distance(robot.position, charger.position) for charger in env.charge_stations])
-    markers["distance_to_charger"] = -closest_charger * charger_gain #TODO: add flat debuff
+    markers["distance_to_charger"] = -(closest_charger+1) * charger_gain
 
     return sum([markers[key] * marker_weights[key] for key in markers.keys()])
 
@@ -83,10 +77,9 @@ class DNA:
 class AgentGreedyImproved(AgentGreedy):
     def __init__(self):
         super().__init__()
-        self.DNA = DNA(6, 0, 10)
+        self.DNA = DNA(8, 0, 100)
         self.genetic_worth = 0
         self.wins = 0
-        # TODO: Add num generations, num mutations
 
     def heuristic(self, env: WarehouseEnv, robot_id: int):
         return smart_heuristic(env, robot_id, self.DNA)
@@ -98,7 +91,7 @@ class AgentMinimax(Agent):
         self.original = agent_id
         iterations = 1
         try:
-            func_timeout.func_timeout(time_limit-0.1, self.anytime_step, args=(env, self.original, iterations))
+            func_timeout.func_timeout(time_limit-0.2, self.anytime_step, args=(env, self.original, iterations))
         except func_timeout.FunctionTimedOut:
             return self.best_move
 
@@ -109,17 +102,12 @@ class AgentMinimax(Agent):
             child_values = [self.value(child, agent_id, iterations) for child in children]
             self.best_move = operators[child_values.index(max(child_values))]
             iterations += 1
-            print(iterations)
-
 
     def value(self, state: WarehouseEnv, agent_id, iterations):
-        if iterations>7:
-            1+1
         if state.done():
             return state.get_robot(self.original).credit - state.get_robot((self.original + 1) % 2).credit
         if iterations == 0:
-            return state.get_robot(self.original).credit - state.get_robot((self.original + 1) % 2).credit
-            #return smart_heuristic(state, self.original, None)
+            return smart_heuristic(state, self.original, None)
         if agent_id == self.original:
             return self.max_value(state, agent_id, iterations)
         else:
@@ -160,9 +148,7 @@ class AgentHardCoded(Agent):
     def __init__(self):
         self.step = 0
         # specifiy the path you want to check - if a move is illegal - the agent will choose a random move
-        self.trajectory = ["move west", "move west", "move south", "pick up", "move east", "move east", "move east",
-                           "drop off", "move east", "move south", "pick up", "move west", "move west", "move west",
-                           "move south", "move south", "drop off"]
+        self.trajectory = ["move west", "move west", "move south"]
 
     def run_step(self, env: WarehouseEnv, robot_id, time_limit):
         if self.step == len(self.trajectory):
