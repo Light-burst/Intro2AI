@@ -2,7 +2,7 @@ from Agent import Agent, AgentGreedy
 from WarehouseEnv import WarehouseEnv, manhattan_distance
 import random
 import func_timeout
-# TODO: section a : 3
+
 
 
 def smart_heuristic(env: WarehouseEnv, robot_id: int, dna):
@@ -11,6 +11,10 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int, dna):
     other_robot = env.get_robot((robot_id + 1) % 2)
     bat_percent = robot.battery / 20
     charger_gain = (min(20, bat_percent + robot.credit) - bat_percent)
+
+    # Endgame?
+    if env.done():
+        return float("inf") if robot.credit-other_robot.credit > 0 else -float("inf")
 
     # Weight of each marker
     marker_weights = {
@@ -91,7 +95,7 @@ class AgentMinimax(Agent):
         self.original = agent_id
         iterations = 1
         try:
-            func_timeout.func_timeout(time_limit-0.2, self.anytime_step, args=(env, self.original, iterations))
+            func_timeout.func_timeout(time_limit-0.1, self.anytime_step, args=(env, self.original, iterations))
         except func_timeout.FunctionTimedOut:
             return self.best_move
 
@@ -100,13 +104,13 @@ class AgentMinimax(Agent):
         children = self.apply_moves(agent_id, env)
         while True:
             child_values = [self.value(child, agent_id, iterations) for child in children]
+            print("MINIMAX")
+            print(child_values)
             self.best_move = operators[child_values.index(max(child_values))]
             iterations += 1
 
     def value(self, state: WarehouseEnv, agent_id, iterations):
-        if state.done():
-            return state.get_robot(self.original).credit - state.get_robot((self.original + 1) % 2).credit
-        if iterations == 0:
+        if iterations==0 or state.done():
             return smart_heuristic(state, self.original, None)
         if agent_id == self.original:
             return self.max_value(state, agent_id, iterations)
@@ -132,9 +136,64 @@ class AgentMinimax(Agent):
 
 
 class AgentAlphaBeta(Agent):
-    # TODO: section c : 1
     def run_step(self, env: WarehouseEnv, agent_id, time_limit):
-        raise NotImplementedError()
+        self.best_move = None
+        self.original = agent_id
+        iterations = 1
+        minimax = AgentMinimax()
+        minimax.run_step(env, agent_id, time_limit/2)
+        minimax_move = minimax.best_move
+        try:
+            func_timeout.func_timeout(time_limit/2 - 0.1, self.anytime_step, args=(env, self.original, iterations))
+        except func_timeout.FunctionTimedOut:
+            if self.best_move != minimax_move:
+                print(self.best_move, minimax_move)
+                raise Exception
+            return self.best_move
+
+    def anytime_step(self, env: WarehouseEnv, agent_id, iterations):
+        operators = env.get_legal_operators(agent_id)
+        children = AgentMinimax.apply_moves(AgentMinimax(), agent_id, env)
+        while True:
+            child_values = [self.value(child, agent_id, iterations) for child in children]
+            print("AB")
+            print(child_values)
+            self.best_move = operators[child_values.index(max(child_values))]
+            iterations += 1
+            print(iterations)
+
+    def value(self, state: WarehouseEnv, agent_id, iterations):
+        alpha = -float("inf")
+        beta = float("inf")
+        result = self.max_value(state, agent_id, iterations, alpha, beta)
+        return result
+
+
+    def max_value(self, state: WarehouseEnv, agent_id, iterations, alpha, beta):
+        if iterations==0 or state.done():
+            return smart_heuristic(state, agent_id, None)
+        new_agent_id = (agent_id + 1) % 2
+        children = AgentMinimax.apply_moves(AgentMinimax(), agent_id, state)
+        result = -float("inf")
+        for child in children:
+            result = max(result, self.min_value(child, new_agent_id, iterations-1, alpha, beta))
+            if result >= beta:
+                return result
+            alpha = max(alpha, result)
+        return result
+
+    def min_value(self, state: WarehouseEnv, agent_id, iterations, alpha, beta):
+        if iterations==0 or state.done():
+            return smart_heuristic(state, agent_id, None)
+        new_agent_id = (agent_id + 1) % 2
+        children = AgentMinimax.apply_moves(AgentMinimax(), agent_id, state)
+        result = float("inf")
+        for child in children:
+            result = min(result, self.max_value(child, new_agent_id, iterations - 1, alpha, beta))
+            if result <= alpha:
+                return result
+            beta = min(beta, result)
+        return result
 
 
 class AgentExpectimax(Agent):
