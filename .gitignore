@@ -1,2 +1,10 @@
 venv/
+HW2/Agent.py
+
+HW2/WarehouseEnv.py
+
+HW2/__pycache__/
+
+HW2/main.py
+HW2/icons/
 HW2_files/

@@ -140,15 +140,16 @@ class AgentAlphaBeta(Agent):
         self.best_move = None
         self.original = agent_id
         iterations = 1
-        minimax = AgentMinimax()
-        minimax.run_step(env, agent_id, time_limit/2)
-        minimax_move = minimax.best_move
+        #minimax = AgentMinimax()
+        #minimax.run_step(env, agent_id, time_limit/2)
+        #minimax_move = minimax.best_move
         try:
-            func_timeout.func_timeout(time_limit/2 - 0.1, self.anytime_step, args=(env, self.original, iterations))
-        except func_timeout.FunctionTimedOut:
-            if self.best_move != minimax_move:
-                print(self.best_move, minimax_move)
-                raise Exception
+            func_timeout.func_timeout(time_limit - 0.1, self.anytime_step, args=(env, self.original, iterations))
+        except Exception:
+            # if self.best_move != minimax_move:
+            #   print(self.best_move, minimax_move)
+            #    raise Exception
+            print(f"best move is ${self.best_move}")
             return self.best_move
 
     def anytime_step(self, env: WarehouseEnv, agent_id, iterations):
@@ -156,10 +157,10 @@ class AgentAlphaBeta(Agent):
         children = AgentMinimax.apply_moves(AgentMinimax(), agent_id, env)
         while True:
             child_values = [self.value(child, agent_id, iterations) for child in children]
-            print("AB")
-            print(child_values)
             self.best_move = operators[child_values.index(max(child_values))]
             iterations += 1
+            if iterations > 5:
+                raise func_timeout.FunctionTimedOut()
             print(iterations)
 
     def value(self, state: WarehouseEnv, agent_id, iterations):
