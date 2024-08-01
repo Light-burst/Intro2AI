@@ -17,7 +17,7 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int, dna):
         return float("inf") if robot.credit-other_robot.credit > 0 else -float("inf")
 
     # Weight of each marker
-    marker_weights = {
+    marker_weights = {                             # These weights were generated using a genetic algorithm
         "delta_credit": 47.470865087833594,
         "delta_battery": 77.19133774735107,
         "delta_pack": 51.244108828398836,
