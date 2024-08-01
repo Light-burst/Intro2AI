@@ -159,7 +159,6 @@ class AgentAlphaBeta(Agent):
         result = self.max_value(state, agent_id, iterations, alpha, beta)
         return result
 
-
     def max_value(self, state: WarehouseEnv, agent_id, iterations, alpha, beta):
         if iterations==0 or state.done():
             return smart_heuristic(state, agent_id, None)
@@ -199,7 +198,7 @@ class AgentExpectimax(Agent):
 
     def anytime_step(self, env: WarehouseEnv, agent_id, iterations):
         operators = env.get_legal_operators(agent_id)
-        children = self.apply_moves(agent_id, env)
+        children = AgentMinimax.apply_moves(AgentMinimax(), agent_id, env)
         while True:
             child_values = [self.value(child, agent_id, iterations) for child in children]
             self.best_move = operators[child_values.index(max(child_values))]
@@ -215,7 +214,7 @@ class AgentExpectimax(Agent):
 
     def max_value(self, state: WarehouseEnv, agent_id, iterations):
         new_agent_id = (agent_id + 1) % 2
-        children = self.apply_moves(agent_id, state)
+        children = AgentMinimax.apply_moves(AgentMinimax(), agent_id, state)
         return max([self.value(child, new_agent_id, iterations - 1) for child in children])
 
     def exp_value(self, state: WarehouseEnv, agent_id, iterations):
@@ -227,19 +226,12 @@ class AgentExpectimax(Agent):
                  "pick up":1.0,
                  "charge":1.0,
                  "drop off":1.0,
-                 "park": 1.0}
+                 "park":1.0}
         operators = state.get_legal_operators(agent_id)
         sum_chance = sum([moves[op] for op in operators])
         children = [(state.clone(), op) for op in operators]
         [child[0].apply_operator(agent_id, child[1]) for child in children]
         return sum([(moves[child[1]]/sum_chance)*self.value(child[0], new_agent_id, iterations-1) for child in children])
-
-    def apply_moves(self, agent, env: WarehouseEnv):
-        operators = env.get_legal_operators(agent)
-        children = [env.clone() for op in operators]
-        for child, op in zip(children, operators):
-            child.apply_operator(agent, op)
-        return children
 
 
 # here you can check specific paths to get to know the environment
