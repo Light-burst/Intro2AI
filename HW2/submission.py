@@ -18,14 +18,14 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int, dna):
 
     # Weight of each marker
     marker_weights = {
-        "delta_credit": 76.58059571136468,
-        "delta_battery": 7.341291533674699,
-        "delta_pack": 5.534079750825349,
-        "credit": 93.74017271498576,
-        "battery": 27.416059349426625,
-        "pack_bonus": 82.46689438553943,
-        "distance_to_target": 13.87751731938508,  # This marker has NEGATIVE value
-        "distance_to_charger": 0.9502993298955875  # This marker has NEGATIVE value
+        "delta_credit": 47.470865087833594,
+        "delta_battery": 77.19133774735107,
+        "delta_pack": 51.244108828398836,
+        "credit": 67.87569668044786,
+        "battery": 30.80650586045808,
+        "pack_bonus": 36.65399952661515,
+        "distance_to_target": 25.441627225945602,  # This marker has NEGATIVE value
+        "distance_to_charger": 1.5621648126360552  # This marker has NEGATIVE value
     }
 
     # Calculate markers that give the robot advantage
@@ -104,8 +104,6 @@ class AgentMinimax(Agent):
         children = self.apply_moves(agent_id, env)
         while True:
             child_values = [self.value(child, agent_id, iterations) for child in children]
-            print("MINIMAX")
-            print(child_values)
             self.best_move = operators[child_values.index(max(child_values))]
             iterations += 1
 
@@ -140,16 +138,9 @@ class AgentAlphaBeta(Agent):
         self.best_move = None
         self.original = agent_id
         iterations = 1
-        #minimax = AgentMinimax()
-        #minimax.run_step(env, agent_id, time_limit/2)
-        #minimax_move = minimax.best_move
         try:
             func_timeout.func_timeout(time_limit - 0.1, self.anytime_step, args=(env, self.original, iterations))
         except Exception:
-            # if self.best_move != minimax_move:
-            #   print(self.best_move, minimax_move)
-            #    raise Exception
-            print(f"best move is ${self.best_move}")
             return self.best_move
 
     def anytime_step(self, env: WarehouseEnv, agent_id, iterations):
@@ -159,9 +150,8 @@ class AgentAlphaBeta(Agent):
             child_values = [self.value(child, agent_id, iterations) for child in children]
             self.best_move = operators[child_values.index(max(child_values))]
             iterations += 1
-            if iterations > 5:
-                raise func_timeout.FunctionTimedOut()
-            print(iterations)
+            if iterations > 4:
+                raise Exception()
 
     def value(self, state: WarehouseEnv, agent_id, iterations):
         alpha = -float("inf")
